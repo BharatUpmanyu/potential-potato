@@ -33,6 +33,7 @@ Instead of tracking sacks in a notebook, this app lets you store each entry digi
   - Payment pending
   - Total visible weight (kg)
 - Data persistence using browser `localStorage`
+- Backward compatibility: automatically migrates older saved data from `flour-mill-sacks` to `flour-mill-sacks-v2`
 
 ## Run
 

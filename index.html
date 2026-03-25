@@ -297,6 +297,7 @@
 
   <script>
     const STORAGE_KEY = 'flour-mill-sacks-v2';
+    const LEGACY_STORAGE_KEY = 'flour-mill-sacks';
     const form = document.getElementById('entryForm');
     const rowsEl = document.getElementById('rows');
     const statsEl = document.getElementById('stats');
@@ -381,12 +382,45 @@
       payablePreviewEl.textContent = formatINR(calculateAmount(weight, purpose));
     }
 
+    function normalizeEntry(entry) {
+      const customerName = typeof entry.customerName === 'string' ? entry.customerName.trim() : '';
+      const numericWeight = Number(entry.weight);
+      const weight = Number.isFinite(numericWeight) && numericWeight > 0 ? numericWeight : 0;
+      const purpose = entry.purpose === 'Daliya' ? 'Daliya' : 'Aatta';
+      const delivered = Boolean(entry.delivered);
+      const paid = delivered ? Boolean(entry.paid) : false;
+
+      return {
+        id: entry.id || crypto.randomUUID(),
+        customerName,
+        weight,
+        purpose,
+        delivered,
+        paid,
+        createdAt: entry.createdAt || new Date().toISOString(),
+        updatedAt: entry.updatedAt || null
+      };
+    }
+
+    function parseEntries(raw) {
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(normalizeEntry).filter((entry) => entry.customerName && entry.weight > 0);
+    }
+
     function loadEntries() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        const currentRaw = localStorage.getItem(STORAGE_KEY);
+        const currentEntries = parseEntries(currentRaw);
+        if (currentEntries.length) return currentEntries;
+
+        const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+        const legacyEntries = parseEntries(legacyRaw);
+        if (!legacyEntries.length) return [];
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(legacyEntries));
+        return legacyEntries;
       } catch {
         return [];
       }
