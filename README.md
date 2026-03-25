@@ -12,6 +12,10 @@ Instead of tracking sacks in a notebook, this app lets you store each entry digi
   - Customer name
   - Weight (kg)
   - Purpose (`Aatta` or `Daliya`)
+- Automatic payable calculation:
+  - `Aatta`: ₹3 per kg
+  - `Daliya`: ₹1.5 per kg
+  - Payable amount is shown in the entry form and next to each customer entry
 - Track and update status clearly:
   - `Pending Delivery`
   - `Delivered`
@@ -29,6 +33,7 @@ Instead of tracking sacks in a notebook, this app lets you store each entry digi
   - Payment pending
   - Total visible weight (kg)
 - Data persistence using browser `localStorage`
+- Backward compatibility: automatically migrates older saved data from `flour-mill-sacks` to `flour-mill-sacks-v2`
 
 ## Run
 
@@ -38,3 +43,7 @@ No installation required.
 2. Add and manage customer sack entries.
 
 > Note: Data is stored only in the browser/device where you use the app.
+
+## Merge conflict help
+
+If your PR shows conflicts in `README.md` or `index.html`, follow the guide in `docs/CONFLICT_RESOLUTION.md`.

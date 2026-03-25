@@ -112,8 +112,34 @@
       align-items: end;
     }
 
+    .rate-note {
+      color: var(--muted);
+      font-size: 0.86rem;
+      margin-top: 6px;
+    }
+
+    .pay-box {
+      border: 1px dashed #d6c7af;
+      background: #fffaf3;
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 150px;
+    }
+
+    .pay-box span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-bottom: 2px;
+    }
+
+    .pay-box strong {
+      color: #7c2d12;
+      font-size: 1rem;
+    }
+
     .stats {
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
     }
 
     .metric {
@@ -219,7 +245,12 @@
         <div>
           <button class="btn" type="submit" id="saveBtn">Add Entry</button>
         </div>
+        <div class="pay-box">
+          <span>Calculated Payable</span>
+          <strong id="payablePreview">₹0.00</strong>
+        </div>
       </form>
+      <div class="rate-note">Rates: Aatta grinding ₹3/kg, Daliya ₹1.5/kg.</div>
     </section>
 
     <section class="card">
@@ -254,6 +285,7 @@
             <th>Customer</th>
             <th>Weight</th>
             <th>Purpose</th>
+            <th>Payable</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -265,12 +297,14 @@
 
   <script>
     const STORAGE_KEY = 'flour-mill-sacks-v2';
+    const LEGACY_STORAGE_KEY = 'flour-mill-sacks';
     const form = document.getElementById('entryForm');
     const rowsEl = document.getElementById('rows');
     const statsEl = document.getElementById('stats');
     const searchEl = document.getElementById('search');
     const statusFilterEl = document.getElementById('statusFilter');
     const exportBtn = document.getElementById('exportBtn');
+    const payablePreviewEl = document.getElementById('payablePreview');
 
     const state = {
       entries: loadEntries(),
@@ -281,6 +315,8 @@
     searchEl.addEventListener('input', render);
     statusFilterEl.addEventListener('change', render);
     exportBtn.addEventListener('click', exportCSV);
+    document.getElementById('weight').addEventListener('input', updatePayablePreview);
+    document.getElementById('purpose').addEventListener('change', updatePayablePreview);
 
     function onSubmit(event) {
       event.preventDefault();
@@ -321,16 +357,70 @@
 
       form.reset();
       document.getElementById('purpose').value = 'Aatta';
+      updatePayablePreview();
       persist();
       render();
     }
 
+    function getRate(purpose) {
+      return purpose === 'Daliya' ? 1.5 : 3;
+    }
+
+    function calculateAmount(weight, purpose) {
+      const numericWeight = Number(weight);
+      if (!Number.isFinite(numericWeight) || numericWeight <= 0) return 0;
+      return numericWeight * getRate(purpose);
+    }
+
+    function formatINR(amount) {
+      return `₹${Number(amount).toFixed(2)}`;
+    }
+
+    function updatePayablePreview() {
+      const weight = Number(document.getElementById('weight').value);
+      const purpose = document.getElementById('purpose').value;
+      payablePreviewEl.textContent = formatINR(calculateAmount(weight, purpose));
+    }
+
+    function normalizeEntry(entry) {
+      const customerName = typeof entry.customerName === 'string' ? entry.customerName.trim() : '';
+      const numericWeight = Number(entry.weight);
+      const weight = Number.isFinite(numericWeight) && numericWeight > 0 ? numericWeight : 0;
+      const purpose = entry.purpose === 'Daliya' ? 'Daliya' : 'Aatta';
+      const delivered = Boolean(entry.delivered);
+      const paid = delivered ? Boolean(entry.paid) : false;
+
+      return {
+        id: entry.id || crypto.randomUUID(),
+        customerName,
+        weight,
+        purpose,
+        delivered,
+        paid,
+        createdAt: entry.createdAt || new Date().toISOString(),
+        updatedAt: entry.updatedAt || null
+      };
+    }
+
+    function parseEntries(raw) {
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(normalizeEntry).filter((entry) => entry.customerName && entry.weight > 0);
+    }
+
     function loadEntries() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        const currentRaw = localStorage.getItem(STORAGE_KEY);
+        const currentEntries = parseEntries(currentRaw);
+        if (currentEntries.length) return currentEntries;
+
+        const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+        const legacyEntries = parseEntries(legacyRaw);
+        if (!legacyEntries.length) return [];
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(legacyEntries));
+        return legacyEntries;
       } catch {
         return [];
       }
@@ -396,6 +486,7 @@
       document.getElementById('weight').value = entry.weight;
       document.getElementById('purpose').value = entry.purpose;
       document.getElementById('saveBtn').textContent = 'Update Entry';
+      updatePayablePreview();
       document.getElementById('customerName').focus();
     }
 
@@ -404,6 +495,7 @@
       form.reset();
       document.getElementById('purpose').value = 'Aatta';
       document.getElementById('saveBtn').textContent = 'Add Entry';
+      updatePayablePreview();
     }
 
     function removeEntry(id) {
@@ -441,13 +533,15 @@
       const paid = entries.filter((e) => e.paid).length;
       const pendingPayment = entries.filter((e) => e.delivered && !e.paid).length;
       const totalWeight = entries.reduce((sum, e) => sum + Number(e.weight || 0), 0).toFixed(1);
+      const totalPayable = entries.reduce((sum, e) => sum + calculateAmount(e.weight, e.purpose), 0);
 
       statsEl.innerHTML = [
         metric('Visible Entries', total),
         metric('Delivered', delivered),
         metric('Paid', paid),
         metric('Payment Pending', pendingPayment),
-        metric('Total Weight (kg)', totalWeight)
+        metric('Total Weight (kg)', totalWeight),
+        metric('Total Payable (₹)', Number(totalPayable).toFixed(2))
       ].join('');
     }
 
@@ -472,7 +566,7 @@
       renderStats(entries);
 
       if (!entries.length) {
-        rowsEl.innerHTML = '<tr><td class="empty" colspan="5">No matching entries.</td></tr>';
+        rowsEl.innerHTML = '<tr><td class="empty" colspan="6">No matching entries.</td></tr>';
         return;
       }
 
@@ -482,9 +576,10 @@
 
         return `
           <tr>
-            <td><strong>${escapeHTML(entry.customerName)}</strong>${meta}</td>
+            <td><strong>${escapeHTML(entry.customerName)}</strong><div class="small">Payable: ${formatINR(calculateAmount(entry.weight, entry.purpose))}</div>${meta}</td>
             <td>${escapeHTML(entry.weight)} kg</td>
             <td>${escapeHTML(entry.purpose)}</td>
+            <td>${formatINR(calculateAmount(entry.weight, entry.purpose))}</td>
             <td><div class="chips">${chips(entry)}</div></td>
             <td>
               <div class="actions">
@@ -506,11 +601,12 @@
         return;
       }
 
-      const header = ['Customer Name', 'Weight (kg)', 'Purpose', 'Delivered', 'Paid', 'Payment Pending', 'Updated At'];
+      const header = ['Customer Name', 'Weight (kg)', 'Purpose', 'Payable (Rs)', 'Delivered', 'Paid', 'Payment Pending', 'Updated At'];
       const lines = entries.map((entry) => [
         entry.customerName,
         entry.weight,
         entry.purpose,
+        calculateAmount(entry.weight, entry.purpose).toFixed(2),
         entry.delivered ? 'Yes' : 'No',
         entry.paid ? 'Yes' : 'No',
         entry.delivered && !entry.paid ? 'Yes' : 'No',
@@ -535,6 +631,7 @@
     window.removeEntry = removeEntry;
     window.startEdit = startEdit;
 
+    updatePayablePreview();
     render();
   </script>
 </body>
