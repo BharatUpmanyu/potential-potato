@@ -43,3 +43,7 @@ No installation required.
 2. Add and manage customer sack entries.
 
 > Note: Data is stored only in the browser/device where you use the app.
+
+## Merge conflict help
+
+If your PR shows conflicts in `README.md` or `index.html`, follow the guide in `docs/CONFLICT_RESOLUTION.md`.
